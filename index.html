@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f5">
+  <title>UdhaarOS — Simple shop hisaab</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="UdhaarOS home">
+      <span class="brand-icon" aria-hidden="true">उ</span>
+      <span><strong>UdhaarOS</strong><small>Aapka dukaan ka hisaab</small></span>
+    </a>
+    <div class="store-info"><span class="status-dot"></span><span>Sharma General Store</span><span class="local-badge">DEMO · THIS BROWSER</span></div>
+  </header>
+
+  <main class="page">
+    <section class="welcome">
+      <div><p class="eyebrow" id="todayDate"></p><h1>Namaste! <span>👋</span></h1><p class="muted">Your shop's hisaab, simple and clear.</p></div>
+      <button class="button button-secondary" id="addCustomerTop" type="button">＋ Add customer</button>
+    </section>
+
+    <section class="summary-grid" aria-label="Ledger summary">
+      <article class="summary-card outstanding"><span class="card-label">Total outstanding</span><strong id="totalOutstanding">₹0</strong><span class="card-foot">Abhi customers se lena hai</span><span class="card-icon">₹</span></article>
+      <article class="summary-card"><span class="card-label">Credit given · 7 days</span><strong id="creditWeek">₹0</strong><span class="card-foot">Pichhle 7 din</span><span class="card-icon green">↗</span></article>
+      <article class="summary-card"><span class="card-label">Payments received · 7 days</span><strong id="paymentsWeek">₹0</strong><span class="card-foot">Pichhle 7 din</span><span class="card-icon green">↓</span></article>
+      <article class="summary-card"><span class="card-label">Customers with balance</span><strong id="owingCount">0</strong><span class="card-foot">Customers with udhaar</span><span class="card-icon">♙</span></article>
+    </section>
+
+    <section class="main-grid">
+      <div class="left-column">
+        <section class="panel agent-panel" aria-labelledby="agentTitle">
+          <div class="panel-heading">
+            <div class="agent-title">
+              <span class="agent-avatar" aria-hidden="true">✳</span>
+              <div><h2 id="agentTitle">Ask UdhaarOS</h2><p>Hindi, Hinglish ya English mein type karein</p></div>
+            </div>
+            <span class="ai-label"><span class="status-dot"></span> Sarvam AI</span>
+          </div>
+          <div class="chat-body" id="chatBody" aria-live="polite">
+            <div class="chat-message assistant"><span class="message-avatar">उ</span><div class="bubble"><p>Namaste! Hisaab mein madad karun?</p><span class="message-time">UdhaarOS</span></div></div>
+            <div class="suggestions" id="suggestions">
+              <button type="button" class="suggestion">Ramesh ne ₹500 ka samaan udhaar liya</button>
+              <button type="button" class="suggestion">Sita ne ₹200 de diye</button>
+              <button type="button" class="suggestion">Sabse zyada udhaar kispe hai?</button>
+            </div>
+          </div>
+          <form class="chat-form" id="chatForm">
+            <label class="sr-only" for="chatInput">Ask UdhaarOS</label>
+            <input id="chatInput" name="message" placeholder="Jaise: Ramesh ka kitna baaki hai?" autocomplete="off" maxlength="500" required>
+            <button class="send-button" type="submit" aria-label="Send message">↑</button>
+          </form>
+          <p class="demo-note">AI sirf request samajhta hai. Hisaab ledger se calculate hota hai.</p>
+        </section>
+
+        <section class="panel activity-panel">
+          <div class="section-heading"><div><h2>Recent activity</h2><p>Latest hisaab entries</p></div><button class="text-button" id="viewAll" type="button">View all <span>→</span></button></div>
+          <div class="activity-list" id="activityList"></div>
+        </section>
+      </div>
+
+      <aside class="panel customers-panel">
+        <div class="section-heading"><div><h2>Customers</h2><p>Highest balance first</p></div><span class="count-pill" id="customerCount">0</span></div>
+        <label class="search-box"><span aria-hidden="true">⌕</span><span class="sr-only">Search customers</span><input id="customerSearch" type="search" placeholder="Search customers"></label>
+        <div class="customer-list" id="customerList"></div>
+        <button class="button button-outline full-width" id="addCustomerSide" type="button">＋ Add customer</button>
+        <button class="reset-button" id="resetDemo" type="button">Reset demo data</button>
+      </aside>
+    </section>
+    <p class="storage-warning"><strong>Demo mode:</strong> entries are saved only in this browser and are not backed up or shared across devices. Do not use real customer records.</p>
+  </main>
+
+  <dialog id="transactionDialog" class="modal">
+    <form id="transactionForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">LEDGER ENTRY</p><h2 id="transactionTitle">Record transaction</h2></div><button class="close-button" type="button" data-close aria-label="Close">×</button></div>
+      <label>Customer<select id="transactionCustomer" required></select></label>
+      <label>Type<select id="transactionType"><option value="credit">Credit given (udhaar)</option><option value="payment">Payment received</option></select></label>
+      <label>Amount in rupees<input id="transactionAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 250" required></label>
+      <label>Description <span class="optional">(optional)</span><input id="transactionDescription" maxlength="120" placeholder="e.g. Groceries"></label>
+      <p class="form-error" id="transactionError" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close>Cancel</button><button class="button button-primary" type="submit">Save entry</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="customerDialog" class="modal">
+    <form id="customerForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">CUSTOMER</p><h2>Add customer</h2></div><button class="close-button" type="button" data-close aria-label="Close">×</button></div>
+      <label>Customer name<input id="customerName" maxlength="80" autocomplete="name" required placeholder="e.g. Ramesh Kumar"></label>
+      <label>Phone <span class="optional">(optional)</span><input id="customerPhone" type="tel" maxlength="20" placeholder="e.g. 98765 43210"></label>
+      <p class="form-error" id="customerError" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close>Cancel</button><button class="button button-primary" type="submit">Add customer</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="historyDialog" class="modal history-modal">
+    <div class="modal-heading"><div><p class="eyebrow">CUSTOMER LEDGER</p><h2 id="historyTitle">Customer history</h2><p class="muted" id="historyBalance"></p></div><button class="close-button" type="button" data-close aria-label="Close">×</button></div>
+    <div id="historyList" class="history-list"></div>
+    <div class="modal-actions"><button class="button button-primary" id="historyAddCredit" type="button">＋ Record entry</button></div>
+  </dialog>
+  <div class="voice-control">
+    <p id="voiceStatus" role="status">Tap to speak · 30 sec max</p>
+    <button id="micButton" type="button" aria-label="Start voice recording" title="Speak a command">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4m-4 0h8"/></svg>
+    </button>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
