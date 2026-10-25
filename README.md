@@ -2,6 +2,8 @@
 
 A small, mobile-friendly demo ledger for a neighborhood shop. It has customer balances, credit and payment entries, a basic activity/history view, and a Sarvam-powered Hindi/Hinglish/English command box with microphone input and spoken replies.
 
+https://lambent-pixie-50e27c.netlify.app/
+
 ## Fastest setup
 
 1. Create a free site on Netlify and deploy this folder from a GitHub repository.
