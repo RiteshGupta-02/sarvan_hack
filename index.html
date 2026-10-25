@@ -13,10 +13,26 @@
       <span class="brand-icon" aria-hidden="true">उ</span>
       <span><strong>UdhaarOS</strong><small>Aapka dukaan ka hisaab</small></span>
     </a>
-    <div class="store-info"><span class="status-dot"></span><span>Sharma General Store</span><span class="local-badge">DEMO · THIS BROWSER</span></div>
+    <div class="store-info"><span class="status-dot"></span><span>Private shop ledger</span><button class="text-button" id="logoutButton" type="button" hidden>Sign out</button></div>
   </header>
 
-  <main class="page">
+  <main id="loginScreen" class="login-screen">
+    <section class="panel login-card">
+      <span class="agent-avatar" aria-hidden="true">उ</span>
+      <p class="eyebrow">PRIVATE SHOP LEDGER</p>
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in to open your saved shop records.</p>
+      <form id="loginForm">
+        <label for="ownerPassword">Owner password</label>
+        <input id="ownerPassword" type="password" autocomplete="current-password" required>
+        <p id="loginError" class="form-error" role="alert"></p>
+        <button class="button button-primary" type="submit">Sign in</button>
+      </form>
+      <p id="setupMessage" class="form-error" role="alert" hidden></p>
+    </section>
+  </main>
+
+  <main id="appScreen" class="page" hidden>
     <section class="welcome">
       <div><p class="eyebrow" id="todayDate"></p><h1>Namaste! <span>👋</span></h1><p class="muted">Your shop's hisaab, simple and clear.</p></div>
       <button class="button button-secondary" id="addCustomerTop" type="button">＋ Add customer</button>
@@ -66,10 +82,9 @@
         <label class="search-box"><span aria-hidden="true">⌕</span><span class="sr-only">Search customers</span><input id="customerSearch" type="search" placeholder="Search customers"></label>
         <div class="customer-list" id="customerList"></div>
         <button class="button button-outline full-width" id="addCustomerSide" type="button">＋ Add customer</button>
-        <button class="reset-button" id="resetDemo" type="button">Reset demo data</button>
       </aside>
     </section>
-    <p class="storage-warning"><strong>Demo mode:</strong> entries are saved only in this browser and are not backed up or shared across devices. Do not use real customer records.</p>
+    <p class="storage-warning"><strong>Private storage:</strong> your ledger is saved to your Netlify site and can be changed only after signing in as the shop owner.</p>
   </main>
 
   <dialog id="transactionDialog" class="modal">
@@ -99,7 +114,7 @@
     <div id="historyList" class="history-list"></div>
     <div class="modal-actions"><button class="button button-primary" id="historyAddCredit" type="button">＋ Record entry</button></div>
   </dialog>
-  <div class="voice-control">
+  <div class="voice-control" id="voiceControl" hidden>
     <p id="voiceStatus" role="status">Tap to speak · 30 sec max</p>
     <button id="micButton" type="button" aria-label="Start voice recording" title="Speak a command">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4m-4 0h8"/></svg>

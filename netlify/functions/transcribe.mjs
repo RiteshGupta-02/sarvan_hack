@@ -1,3 +1,6 @@
+import { requireOwner } from "./_lib/auth.mjs";
+import { readLedger } from "./_lib/ledger.mjs";
+
 const json = (statusCode, body) => ({
   statusCode,
   headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -6,6 +9,13 @@ const json = (statusCode, body) => ({
 
 export const handler = async (event) => {
   if (event.httpMethod !== "POST") return json(405, { error: "Use POST for this request." });
+  try {
+    const access = await requireOwner(event);
+    if (access.response) return access.response;
+  } catch (error) {
+    console.error("Owner session verification failed:", error.message);
+    return json(503, { error: "Could not verify your sign-in. Please retry." });
+  }
   const apiKey = process.env.SARVAM_API_KEY || process.env.API_KEY;
   if (!apiKey) return json(503, { error: "Sarvam is not configured yet. Add SARVAM_API_KEY in Netlify site settings." });
 
@@ -28,10 +38,8 @@ export const handler = async (event) => {
     const filename = typeof body.filename === "string" && /^[\w.-]{1,80}$/.test(body.filename)
       ? body.filename
       : "recording.webm";
-    const customerNames = Array.isArray(body.customerNames)
-      ? body.customerNames.filter((name) => typeof name === "string").map((name) => name.slice(0, 64))
-        .slice(0, 50)
-      : [];
+    const { ledger } = await readLedger();
+    const customerNames = ledger.customers.slice(0, 50).map((customer) => customer.name.slice(0, 64));
     const audio = new FormData();
     audio.append("file", new Blob([audioBytes], { type: audioType }), filename);
     audio.append("model", "saaras:v4");

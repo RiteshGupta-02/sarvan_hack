@@ -1,58 +1,60 @@
 # UdhaarOS
 
-A small, mobile-friendly demo ledger for a neighborhood shop. It has customer balances, credit and payment entries, a basic activity/history view, and a Sarvam-powered Hindi/Hinglish/English command box with microphone input and spoken replies.
+A simple, single-owner shop ledger with Hindi/Hinglish chat and voice support. Ledger data is stored on Netlify, not in browser storage.
 
-https://lambent-pixie-50e27c.netlify.app/
+Live site: https://lambent-pixie-50e27c.netlify.app/
 
-## Fastest setup
+## Required Netlify setup
 
-1. Create a free site on Netlify and deploy this folder from a GitHub repository.
-2. In **Site configuration → Environment variables**, add `SARVAM_API_KEY` with your Sarvam key.
-3. Trigger a deploy. No build command or dependency install is needed.
-4. Open the deployed URL and try: “Ramesh ne 500 rupaye ka samaan udhaar liya.”
+The Netlify site needs these environment variables. In **Project configuration → Environment variables**, add:
 
-The Netlify functions keep the Sarvam key server-side. Add it as `SARVAM_API_KEY` in Netlify's site environment variables. For local development, the functions also accept `API_KEY`. Do not put the key in `app.js`, `index.html`, or a `NEXT_PUBLIC_*` variable. Netlify's free plan limits can change; check its current pricing before deployment.
+- `OWNER_PASSWORD`: a private password with at least 16 characters. Only the owner should know it.
+- `SARVAM_API_KEY`: your Sarvam API key. If an older deploy already uses `API_KEY`, that name is still accepted.
+
+Redeploy after saving the variables. No Supabase project or database setup is required. Netlify Blobs creates the persistent site-wide storage when the owner first signs in. It survives new deploys and can be accessed from another browser after signing in.
+
+The owner signs in with `OWNER_PASSWORD`. The app uses a secure, HTTP-only session cookie; ledger, agent, transcription, and speech endpoints all require that session. There is one owner account and one shop ledger.
 
 ## Run locally
 
-The static page can be opened directly for the manual ledger. To test the AI function locally, install Node.js and Netlify CLI, then:
+Install Node.js 20 or newer and Netlify CLI. Link this folder to the Netlify site so the local functions can access its Blobs store:
 
 ```sh
+npm install
 npm install -g netlify-cli
+netlify link
 netlify dev
 ```
 
-Set `SARVAM_API_KEY` in the local shell before running `netlify dev`. On Windows PowerShell:
+For local-only environment variables, create an ignored `.env` in this folder:
 
-```powershell
-$env:SARVAM_API_KEY = "your-key"
-netlify dev
+```env
+OWNER_PASSWORD=use_a_private_password_at_least_16_characters
+SARVAM_API_KEY=your_sarvam_key
 ```
 
-## Demo storage limitation
+Never commit `.env` or put the Sarvam key in browser code. `.env` is ignored by Git; `.env.example` contains placeholders only.
 
-This quick MVP saves entries in the current browser's `localStorage`. Data is not stored in a shared database, backed up, encrypted for production use, or available on another device. Clearing site data will erase it. The app seeds fictional sample customers on first open. **Use only fictional demo data; do not use this version for real shop accounts or customer financial records.**
+## How it works
 
-## What is included
+- Netlify Blobs stores customers and transactions persistently.
+- The server validates writes, calculates balances from ledger entries, and rejects payments larger than the current balance.
+- ETag-conditional writes prevent simultaneous requests from silently overwriting the ledger; the UI asks the owner to retry if another write wins.
+- Sarvam classifies the latest request with recent chat context. It cannot calculate balances or write records directly.
+- Failed AI requests show an explicit error and a Retry button. Retried ledger writes use the same idempotency ID.
+- The bottom microphone sends a short recording to Saaras v4. Transcribed text is shown for review before sending. Voice replies use Bulbul v3 for its supported languages.
+- No demo customers are preloaded. The owner starts with an empty ledger.
 
-- Customer creation and search.
-- Manual credit/payment recording, with paise precision and an overpayment check.
-- Balances calculated from ledger entries, not AI responses.
-- Demo totals, recent activity, customer history, and reset.
-- Sarvam intent extraction through a Netlify serverless function. The browser validates customer identity and performs ledger calculations.
-- The bottom microphone records up to 30 seconds, uses Saaras v4 to recognize regional-language speech, and fills the chat input for review before sending. Voice-originated replies are spoken with Bulbul v3 when the detected language is supported.
-- Clear failure handling: if Sarvam is unavailable, its command is not saved; manual entry remains available.
+## Limitations
 
-Microphone use requires permission and HTTPS (localhost is allowed for development). Saaras automatically detects language; Bulbul v3 spoken replies support Hindi, Bengali, Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Punjabi, Odia, and English. Voice audio is sent to Sarvam for processing.
+This is a small single-owner app, not a multi-user accounting system. Netlify Blobs is a key/value store rather than a relational database; the ledger is stored as one JSON record and is best suited to one shop with modest activity. Keep an independent backup of important records. Data previously held in the old browser demo is not imported.
 
-Not included: persistent cloud database, authentication, multi-shop access, phone-call voice agents, or production data security.
+## Quick checks
 
-## Quick manual checks
-
-1. On first load, confirm sample balances add up to ₹1,000.
-2. Record a ₹500 credit for Ramesh; confirm his balance becomes ₹800.
-3. Record a ₹200 payment for Ramesh; confirm his balance becomes ₹600.
-4. Try a ₹10,000 payment for Ramesh; confirm it is rejected.
-5. Reload the same browser; confirm entries remain.
-6. Configure Sarvam and ask for the top debtor; check the answer against the displayed ledger.
-7. Try the page at a narrow mobile width.
+1. Sign in and add a customer.
+2. Record credit and payment, then confirm the balance updates.
+3. Try a payment larger than the balance; it must be rejected.
+4. Reload and sign in from another browser; confirm the records persist.
+5. Ask the assistant a balance question, then test a follow-up clarification.
+6. Temporarily use an invalid Sarvam key; confirm the chat shows an error and Retry instead of silently stopping.
+7. Use the microphone on the HTTPS site, review the transcript, then send it.

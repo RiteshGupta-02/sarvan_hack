@@ -1,3 +1,5 @@
+import { requireOwner } from "./_lib/auth.mjs";
+
 const json = (statusCode, body) => ({
   statusCode,
   headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -11,6 +13,13 @@ const supportedLanguages = new Set([
 
 export const handler = async (event) => {
   if (event.httpMethod !== "POST") return json(405, { error: "Use POST for this request." });
+  try {
+    const access = await requireOwner(event);
+    if (access.response) return access.response;
+  } catch (error) {
+    console.error("Owner session verification failed:", error.message);
+    return json(503, { error: "Could not verify your sign-in. Please retry." });
+  }
   const apiKey = process.env.SARVAM_API_KEY || process.env.API_KEY;
   if (!apiKey) return json(503, { error: "Sarvam is not configured yet. Add SARVAM_API_KEY in Netlify site settings." });
 

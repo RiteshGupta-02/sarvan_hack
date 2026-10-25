@@ -1,68 +1,41 @@
 (() => {
-  const STORAGE_KEY = "udhaaros-ledger-v1";
   const money = (paise) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(paise / 100);
   const safeDate = (date) => new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  const seed = () => {
-    const openingDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const customers = [
-      { id: crypto.randomUUID(), name: "Ramesh Kumar", phone: "", createdAt: openingDate },
-      { id: crypto.randomUUID(), name: "Sita Devi", phone: "", createdAt: openingDate },
-      { id: crypto.randomUUID(), name: "Mohan Singh", phone: "", createdAt: openingDate },
-      { id: crypto.randomUUID(), name: "Priya Sharma", phone: "", createdAt: openingDate },
-      { id: crypto.randomUUID(), name: "Amit Verma", phone: "", createdAt: openingDate }
-    ];
-    const amounts = [30000, 15000, 0, 45000, 10000];
-    const transactions = customers.flatMap((customer, index) => amounts[index] ? [{
-      id: crypto.randomUUID(), customerId: customer.id, type: "credit", amountPaise: amounts[index],
-      description: "Opening balance · demo", createdAt: openingDate
-    }] : []);
-    return { customers, transactions };
-  };
-  const load = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) {
-        const initial = seed();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        return initial;
-      }
-      const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed.customers) || !Array.isArray(parsed.transactions)) throw new Error("Saved ledger data is invalid.");
-      return parsed;
-    } catch (error) {
-      console.error("Could not load the local ledger.", error);
-      throw error;
-    }
-  };
-  let state;
-  try {
-    state = load();
-  } catch {
-    document.body.innerHTML = '<main class="storage-error"><h1>Ledger storage is unavailable</h1><p>UdhaarOS needs browser storage for this demo. Enable site storage in your browser and reload. No entries were saved.</p></main>';
-    return;
-  }
+  let state = { customers: [], transactions: [] };
   let toastTimer;
   let pendingVoiceLanguage = null;
+  let conversationHistory = [];
+  let lastFailedMessage = null;
   let activeRecorder = null;
   let activeStream = null;
   let recordingTimeout = null;
   let currentAudioUrl = null;
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  const request = async (path, options = {}) => {
+    let response;
+    try {
+      response = await fetch(path, { credentials: "same-origin", ...options });
+    } catch {
+      throw new Error("Network connection lost. Check your connection and retry.");
+    }
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      showLogin("Your sign-in expired. Please sign in again.");
+      throw new Error("Please sign in again to continue.");
+    }
+    if (!response.ok) throw new Error(result.error || "Request failed. Please retry.");
+    return result;
+  };
+  const postJson = (path, body) => request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const balanceFor = (customerId) => state.transactions.reduce((balance, tx) => {
     if (tx.customerId !== customerId) return balance;
     return balance + (tx.type === "credit" ? tx.amountPaise : -tx.amountPaise);
   }, 0);
-  const save = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      render();
-    } catch (error) {
-      console.error("Could not save the local ledger.", error);
-      showToast("Could not save. Check this browser's available storage.");
-      throw error;
-    }
-  };
   $("#todayDate").textContent = new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toLocaleUpperCase();
   const showToast = (message) => {
     const toast = $("#toast");
@@ -70,6 +43,47 @@
     toast.classList.add("visible");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("visible"), 3000);
+  };
+  const showLogin = (message = "") => {
+    $("#appScreen").hidden = true;
+    $("#loginScreen").hidden = false;
+    $("#logoutButton").hidden = true;
+    $("#voiceControl").hidden = true;
+    document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+    $("#chatBody").querySelectorAll(".chat-message:not(:first-child)").forEach((message) => message.remove());
+    $("#suggestions").hidden = false;
+    $("#chatInput").value = "";
+    conversationHistory = [];
+    $("#loginError").textContent = message;
+    $("#loginError").classList.toggle("visible", Boolean(message));
+  };
+  const showSetupError = (message) => {
+    $("#loginForm").hidden = true;
+    $("#setupMessage").textContent = message;
+    $("#setupMessage").classList.add("visible");
+    $("#setupMessage").hidden = false;
+  };
+  const loadLedger = async () => {
+    state = await request("/.netlify/functions/ledger");
+    render();
+    $("#loginScreen").hidden = true;
+    $("#appScreen").hidden = false;
+    $("#logoutButton").hidden = false;
+    $("#voiceControl").hidden = false;
+  };
+  const showErrorWithRetry = (message, retry) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-message assistant";
+    wrapper.innerHTML = '<span class="message-avatar">उ</span><div class="bubble"><p></p></div>';
+    wrapper.querySelector("p").textContent = message;
+    const button = document.createElement("button");
+    button.className = "retry-button";
+    button.type = "button";
+    button.textContent = "Retry";
+    button.addEventListener("click", retry, { once: true });
+    wrapper.querySelector(".bubble").append(button);
+    $("#chatBody").append(wrapper);
+    $("#chatBody").scrollTop = $("#chatBody").scrollHeight;
   };
   const render = () => {
     const now = Date.now();
@@ -124,6 +138,7 @@
       return;
     }
     $("#transactionForm").reset();
+    delete $("#transactionForm").dataset.requestId;
     $("#transactionError").classList.remove("visible");
     $("#transactionCustomer").innerHTML = state.customers.map((customer) => `<option value="${escapeHtml(customer.id)}">${escapeHtml(customer.name)} · ${money(balanceFor(customer.id))}</option>`).join("");
     if (customerId && state.customers.some((customer) => customer.id === customerId)) $("#transactionCustomer").value = customerId;
@@ -141,21 +156,18 @@
     $("#historyAddCredit").dataset.customer = customer.id;
     $("#historyDialog").showModal();
   };
-  const addTransaction = (customerId, type, amountPaise, description = "") => {
-    const customer = state.customers.find((item) => item.id === customerId);
-    if (!customer) throw new Error("Customer not found. Add the customer first.");
-    if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) throw new Error("Enter an amount greater than zero.");
-    const current = balanceFor(customerId);
-    if (type === "payment" && amountPaise > current) throw new Error(`${customer.name} ka balance ${money(current)} hai. Payment record nahi hua.`);
-    const transaction = { id: crypto.randomUUID(), customerId, type, amountPaise, description: description.slice(0, 120), createdAt: new Date().toISOString() };
-    state.transactions.push(transaction);
-    try {
-      save();
-    } catch (error) {
-      state.transactions.pop();
-      throw error;
-    }
-    return balanceFor(customerId);
+  const addTransaction = async (customerId, type, amountPaise, description = "", requestId = crypto.randomUUID()) => {
+    const result = await postJson("/.netlify/functions/ledger", {
+      action: "create_transaction",
+      customerId,
+      type,
+      amountPaise,
+      description,
+      requestId
+    });
+    state = { customers: result.customers, transactions: result.transactions };
+    render();
+    return result.balancePaise;
   };
   const appendMessage = (text, role = "assistant") => {
     const wrapper = document.createElement("div");
@@ -169,23 +181,20 @@
   const resolveCustomer = (name) => {
     if (typeof name !== "string" || !name.trim()) return { error: "Kis customer ka naam hai? Please customer ka naam batayein." };
     const needle = name.trim().toLocaleLowerCase();
-    const matches = state.customers.filter((customer) => customer.name.toLocaleLowerCase() === needle);
+    const exactMatches = state.customers.filter((customer) => customer.name.toLocaleLowerCase() === needle);
+    const matches = exactMatches.length ? exactMatches : state.customers.filter((customer) => {
+      const customerName = customer.name.toLocaleLowerCase();
+      return customerName.startsWith(`${needle} `) || customerName.split(/\s+/).includes(needle);
+    });
     if (matches.length === 1) return { customer: matches[0] };
     if (matches.length > 1) return { error: `"${name}" naam ke kai customers hain. Customer list se sahi naam select karein.` };
     return { error: `"${name}" customer nahi mila. Pehle “Add customer” se unhe add karein.` };
   };
-  const interpretLocally = async (message) => {
-    const response = await fetch("/.netlify/functions/agent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, customerNames: state.customers.map((customer) => customer.name) })
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "AI se jawab nahi mila. Thodi der baad dobara try karein.");
-    return result;
+  const interpretLocally = async (message, history) => {
+    return postJson("/.netlify/functions/agent", { message, history });
   };
-  const handleAgent = async (message) => {
-    const result = await interpretLocally(message);
+  const handleAgent = async (message, requestId, history) => {
+    const result = await interpretLocally(message, history);
     if (result.needs_clarification || result.intent === "clarify") return result.reply || "Thoda aur detail batayein—kaunsa customer aur kitne rupaye?";
     const { intent, customer_name: customerName, amount_paise: amount, description } = result;
     if (intent === "list_top_debtors") {
@@ -212,20 +221,14 @@
     if (intent !== "add_credit" && intent !== "record_payment") return result.reply || "Yeh request samajh nahi aayi. Try karein: “Ramesh ka balance batao.”";
     if (!Number.isSafeInteger(amount) || amount <= 0) return "Amount clear nahi hai. Jaise: “Ramesh ko ₹200 ka udhaar do.”";
     const type = intent === "add_credit" ? "credit" : "payment";
-    const newBalance = addTransaction(customer.id, type, amount, typeof description === "string" ? description : "");
+    const newBalance = await addTransaction(customer.id, type, amount, typeof description === "string" ? description : "", requestId);
     return type === "credit"
       ? `${customer.name} ke naam ${money(amount)} udhaar save hua. Naya balance: ${money(newBalance)}.`
       : `${money(amount)} payment save hua. ${customer.name} ka naya balance: ${money(newBalance)}.`;
   };
 
   const speakReply = async (text, languageCode) => {
-    const response = await fetch("/.netlify/functions/speak", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 500), languageCode })
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "Could not create spoken reply.");
+    const result = await postJson("/.netlify/functions/speak", { text: text.slice(0, 500), languageCode });
     if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
     currentAudioUrl = URL.createObjectURL(new Blob(
       [Uint8Array.from(atob(result.audio), (character) => character.charCodeAt(0))],
@@ -248,18 +251,11 @@
         reader.addEventListener("error", () => reject(new Error("Could not read the audio recording.")));
         reader.readAsDataURL(blob);
       });
-      const response = await fetch("/.netlify/functions/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const result = await postJson("/.netlify/functions/transcribe", {
           audioBase64,
           audioType: blob.type || "audio/webm",
-          filename: `recording.${extension}`,
-          customerNames: state.customers.slice(0, 50).map((customer) => customer.name)
-        })
+          filename: `recording.${extension}`
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Transcription failed. Please try again.");
       $("#chatInput").value = result.transcript;
       pendingVoiceLanguage = result.languageCode || "hi-IN";
       $("#chatInput").focus();
@@ -290,18 +286,20 @@
     button.disabled = true;
     try {
       activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = activeStream;
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
         .find((type) => MediaRecorder.isTypeSupported(type));
-      activeRecorder = mimeType ? new MediaRecorder(activeStream, { mimeType }) : new MediaRecorder(activeStream);
+      activeRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = activeRecorder;
       const chunks = [];
-      activeRecorder.addEventListener("dataavailable", (event) => {
+      recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size) chunks.push(event.data);
       });
-      activeRecorder.addEventListener("stop", () => {
-        const blob = new Blob(chunks, { type: activeRecorder.mimeType || "audio/webm" });
-        activeStream?.getTracks().forEach((track) => track.stop());
+      recorder.addEventListener("stop", () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        stream.getTracks().forEach((track) => track.stop());
         activeStream = null;
-        activeRecorder = null;
+        if (activeRecorder === recorder) activeRecorder = null;
         if (!blob.size) {
           $("#voiceStatus").textContent = "No audio recorded · tap to try again";
           return;
@@ -328,28 +326,30 @@
     else void startRecording();
   });
 
-  $("#chatForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const input = $("#chatInput");
-    const message = input.value.trim();
-    if (!message) return;
-    const voiceLanguage = pendingVoiceLanguage;
-    pendingVoiceLanguage = null;
-    if (voiceLanguage) $("#voiceStatus").textContent = "Tap to speak · 30 sec max";
-    appendMessage(message, "user");
-    input.value = "";
+  let sendingMessage = false;
+  const sendMessage = async (message, voiceLanguage, requestId = crypto.randomUUID(), appendUserMessage = true) => {
+    if (sendingMessage) return;
+    sendingMessage = true;
+    if (appendUserMessage) appendMessage(message, "user");
+    $("#chatInput").value = "";
     const send = $("#chatForm button");
     send.disabled = true;
     send.textContent = "…";
+    const suggestions = $("#suggestions");
+    if (suggestions) suggestions.hidden = true;
     const waiting = document.createElement("div");
     waiting.className = "chat-message assistant";
     waiting.innerHTML = '<span class="message-avatar">उ</span><div class="bubble"><p>Ek pal…</p></div>';
     $("#chatBody").append(waiting);
     $("#chatBody").scrollTop = $("#chatBody").scrollHeight;
     try {
-      const reply = await handleAgent(message);
+      state = await request("/.netlify/functions/ledger");
+      render();
+      const reply = await handleAgent(message, requestId, conversationHistory.slice(-6));
       waiting.remove();
       appendMessage(reply);
+      conversationHistory.push({ role: "user", content: message }, { role: "assistant", content: reply });
+      conversationHistory = conversationHistory.slice(-8);
       if (voiceLanguage) {
         try {
           await speakReply(reply, voiceLanguage);
@@ -360,13 +360,25 @@
       }
     } catch (error) {
       waiting.remove();
-      appendMessage(error instanceof Error ? error.message : "Request complete nahi hua. Please dobara try karein.");
-      input.value = message;
+      const errorMessage = error instanceof Error ? error.message : "Request complete nahi hua. Please dobara try karein.";
+      showErrorWithRetry(errorMessage, () => void sendMessage(message, voiceLanguage, requestId, false));
+      $("#chatInput").value = message;
     } finally {
       send.disabled = false;
       send.textContent = "↑";
-      input.focus();
+      sendingMessage = false;
+      $("#chatInput").focus();
     }
+  };
+  $("#chatForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = $("#chatInput");
+    const message = input.value.trim();
+    if (!message) return;
+    const voiceLanguage = pendingVoiceLanguage;
+    pendingVoiceLanguage = null;
+    if (voiceLanguage) $("#voiceStatus").textContent = "Tap to speak · 30 sec max";
+    void sendMessage(message, voiceLanguage);
   });
   $("#suggestions").addEventListener("click", (event) => {
     const button = event.target.closest(".suggestion");
@@ -402,7 +414,7 @@
     openTransactionDialog(customerId, "credit");
   });
   document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
-  $("#customerForm").addEventListener("submit", (event) => {
+  $("#customerForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = $("#customerName").value.trim();
     const phone = $("#customerPhone").value.trim();
@@ -411,43 +423,93 @@
       $("#customerError").classList.add("visible");
       return;
     }
-    const customer = { id: crypto.randomUUID(), name, phone, createdAt: new Date().toISOString() };
-    state.customers.push(customer);
     try {
-      save();
-    } catch {
-      state.customers.pop();
+      const result = await postJson("/.netlify/functions/ledger", { action: "create_customer", name, phone });
+      state = { customers: result.customers, transactions: result.transactions };
+      render();
+    } catch (error) {
+      $("#customerError").textContent = error instanceof Error ? error.message : "Customer could not be saved.";
+      $("#customerError").classList.add("visible");
       return;
     }
     $("#customerDialog").close();
     showToast(`${name} added.`);
   });
-  $("#transactionForm").addEventListener("submit", (event) => {
+  $("#transactionForm").addEventListener("input", () => { delete $("#transactionForm").dataset.requestId; });
+  $("#transactionForm").addEventListener("change", () => { delete $("#transactionForm").dataset.requestId; });
+  $("#transactionForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const amount = Number($("#transactionAmount").value);
     const error = $("#transactionError");
     try {
       if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) > Number.MAX_SAFE_INTEGER) throw new Error("Enter a valid amount greater than zero.");
-      const balance = addTransaction($("#transactionCustomer").value, $("#transactionType").value, Math.round(amount * 100), $("#transactionDescription").value.trim());
+      const requestId = $("#transactionForm").dataset.requestId || crypto.randomUUID();
+      $("#transactionForm").dataset.requestId = requestId;
+      const customerId = $("#transactionCustomer").value;
+      const balance = await addTransaction(customerId, $("#transactionType").value, Math.round(amount * 100), $("#transactionDescription").value.trim(), requestId);
       const customer = state.customers.find((item) => item.id === $("#transactionCustomer").value);
       $("#transactionDialog").close();
       showToast(`Saved. ${customer.name} ka balance ${money(balance)}.`);
+      delete $("#transactionForm").dataset.requestId;
     } catch (errorResult) {
       error.textContent = errorResult instanceof Error ? errorResult.message : "Transaction save nahi hua.";
       error.classList.add("visible");
     }
   });
-  $("#resetDemo").addEventListener("click", () => {
-    if (!confirm("Reset this browser's demo ledger to the original sample customers? This will remove entries added here.")) return;
-    const previous = state;
-    state = seed();
+
+  $("#loginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = $("#ownerPassword").value;
+    const submit = $("#loginForm button");
+    submit.disabled = true;
     try {
-      save();
+      await postJson("/.netlify/functions/auth", { password });
+      $("#ownerPassword").value = "";
+      conversationHistory = [];
+      await loadLedger();
+    } catch (error) {
+      showLogin(error instanceof Error ? error.message : "Sign-in failed. Please retry.");
+      $("#ownerPassword").focus();
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  $("#logoutButton").addEventListener("click", async () => {
+    try {
+      await postJson("/.netlify/functions/auth", { action: "logout" });
     } catch {
-      state = previous;
+      showToast("Could not sign out. Please check your connection.");
       return;
     }
-    showToast("Demo data reset.");
+    state = { customers: [], transactions: [] };
+    conversationHistory = [];
+    showLogin();
   });
-  render();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || $("#appScreen").hidden) return;
+    void request("/.netlify/functions/ledger").then((ledger) => {
+      state = ledger;
+      render();
+    }).catch((error) => showToast(error.message));
+  });
+
+  const initialize = async () => {
+    try {
+      const response = await fetch("/.netlify/functions/auth", { credentials: "same-origin" });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 503) {
+        showSetupError(result.error || "Configure OWNER_PASSWORD in your site environment variables.");
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || "Could not check sign-in.");
+      if (!result.authenticated) {
+        showLogin();
+        return;
+      }
+      await loadLedger();
+    } catch (error) {
+      showSetupError(error instanceof Error ? error.message : "Could not connect. Reload to try again.");
+    }
+  };
+  void initialize();
 })();
