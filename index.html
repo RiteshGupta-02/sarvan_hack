@@ -13,36 +13,31 @@
       <span class="brand-icon" aria-hidden="true">उ</span>
       <span><strong>UdhaarOS</strong><small>Aapka dukaan ka hisaab</small></span>
     </a>
-    <div class="store-info"><span class="status-dot"></span><span>Private shop ledger</span><button class="text-button" id="logoutButton" type="button" hidden>Sign out</button></div>
+    <div class="store-info"><span class="status-dot"></span><span>Saved on this computer</span></div>
   </header>
 
-  <main id="loginScreen" class="login-screen">
-    <section class="panel login-card">
-      <span class="agent-avatar" aria-hidden="true">उ</span>
-      <p class="eyebrow">PRIVATE SHOP LEDGER</p>
-      <h1>Welcome back</h1>
-      <p class="muted">Sign in to open your saved shop records.</p>
-      <form id="loginForm">
-        <label for="ownerPassword">Owner password</label>
-        <input id="ownerPassword" type="password" autocomplete="current-password" required>
-        <p id="loginError" class="form-error" role="alert"></p>
-        <button class="button button-primary" type="submit">Sign in</button>
-      </form>
-      <p id="setupMessage" class="form-error" role="alert" hidden></p>
-    </section>
-  </main>
-
-  <main id="appScreen" class="page" hidden>
+  <main id="appScreen" class="page">
     <section class="welcome">
       <div><p class="eyebrow" id="todayDate"></p><h1>Namaste! <span>👋</span></h1><p class="muted">Your shop's hisaab, simple and clear.</p></div>
-      <button class="button button-secondary" id="addCustomerTop" type="button">＋ Add customer</button>
+      <div class="welcome-actions">
+        <button class="button button-secondary" id="sampleDataButton" type="button">View sample data</button>
+        <button class="button button-secondary" id="addExpenseTop" type="button">＋ Add expense</button>
+        <button class="button button-primary" id="addCustomerTop" type="button">＋ Add customer</button>
+      </div>
+    </section>
+
+    <section class="sample-banner" id="sampleBanner" hidden>
+      <strong>Sample data only</strong>
+      <span>These made-up customers and transactions are separate from your real ledger.</span>
+      <button class="text-button" id="realLedgerButton" type="button">Return to my ledger</button>
     </section>
 
     <section class="summary-grid" aria-label="Ledger summary">
       <article class="summary-card outstanding"><span class="card-label">Total outstanding</span><strong id="totalOutstanding">₹0</strong><span class="card-foot">Abhi customers se lena hai</span><span class="card-icon">₹</span></article>
-      <article class="summary-card"><span class="card-label">Credit given · 7 days</span><strong id="creditWeek">₹0</strong><span class="card-foot">Pichhle 7 din</span><span class="card-icon green">↗</span></article>
+      <article class="summary-card"><span class="card-label">Sales / credit · 7 days</span><strong id="creditWeek">₹0</strong><span class="card-foot">Pichhle 7 din</span><span class="card-icon green">↗</span></article>
       <article class="summary-card"><span class="card-label">Payments received · 7 days</span><strong id="paymentsWeek">₹0</strong><span class="card-foot">Pichhle 7 din</span><span class="card-icon green">↓</span></article>
       <article class="summary-card"><span class="card-label">Customers with balance</span><strong id="owingCount">0</strong><span class="card-foot">Customers with udhaar</span><span class="card-icon">♙</span></article>
+      <article class="summary-card profit-card"><span class="card-label">Profit estimate · all time</span><strong id="totalProfit">₹0</strong><span class="card-foot" id="profitNote">Based only on recorded costs and expenses</span><span class="card-icon green">↗</span></article>
     </section>
 
     <section class="main-grid">
@@ -51,7 +46,7 @@
           <div class="panel-heading">
             <div class="agent-title">
               <span class="agent-avatar" aria-hidden="true">✳</span>
-              <div><h2 id="agentTitle">Ask UdhaarOS</h2><p>Hindi, Hinglish ya English mein type karein</p></div>
+              <div><h2 id="agentTitle">Talk to UdhaarOS</h2><p>Speak in Hindi, Hinglish ya English · replies are spoken</p></div>
             </div>
             <span class="ai-label"><span class="status-dot"></span> Sarvam AI</span>
           </div>
@@ -68,7 +63,7 @@
             <input id="chatInput" name="message" placeholder="Jaise: Ramesh ka kitna baaki hai?" autocomplete="off" maxlength="500" required>
             <button class="send-button" type="submit" aria-label="Send message">↑</button>
           </form>
-          <p class="demo-note">AI sirf request samajhta hai. Hisaab ledger se calculate hota hai.</p>
+          <p class="demo-note">Ask about a customer, sales, expenses or profit—or ask for shop advice. Profit is an estimate until every sale has a cost.</p>
         </section>
 
         <section class="panel activity-panel">
@@ -84,18 +79,29 @@
         <button class="button button-outline full-width" id="addCustomerSide" type="button">＋ Add customer</button>
       </aside>
     </section>
-    <p class="storage-warning"><strong>Private storage:</strong> your ledger is saved to your Netlify site and can be changed only after signing in as the shop owner.</p>
+    <p class="storage-warning"><strong>Local storage:</strong> your ledger stays in this computer's <code>data</code> folder. It is not synced or backed up online.</p>
   </main>
 
   <dialog id="transactionDialog" class="modal">
     <form id="transactionForm" method="dialog">
       <div class="modal-heading"><div><p class="eyebrow">LEDGER ENTRY</p><h2 id="transactionTitle">Record transaction</h2></div><button class="close-button" type="button" data-close aria-label="Close">×</button></div>
       <label>Customer<select id="transactionCustomer" required></select></label>
-      <label>Type<select id="transactionType"><option value="credit">Credit given (udhaar)</option><option value="payment">Payment received</option></select></label>
+      <label>Type<select id="transactionType"><option value="credit">Credit given (udhaar)</option><option value="payment">Payment received (including advance)</option></select></label>
       <label>Amount in rupees<input id="transactionAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 250" required></label>
+      <label id="costField">Cost of goods in rupees <span class="optional">(optional for profit estimate)</span><input id="transactionCost" type="number" min="0" step="0.01" placeholder="e.g. 160"></label>
       <label>Description <span class="optional">(optional)</span><input id="transactionDescription" maxlength="120" placeholder="e.g. Groceries"></label>
       <p class="form-error" id="transactionError" role="alert"></p>
       <div class="modal-actions"><button class="button button-secondary" type="button" data-close>Cancel</button><button class="button button-primary" type="submit">Save entry</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="expenseDialog" class="modal">
+    <form id="expenseForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">SHOP EXPENSE</p><h2>Record expense</h2></div><button class="close-button" type="button" data-close aria-label="Close">×</button></div>
+      <label>Amount in rupees<input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 500" required></label>
+      <label>What was it for?<input id="expenseDescription" maxlength="120" placeholder="e.g. Electricity bill" required></label>
+      <p class="form-error" id="expenseError" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close>Cancel</button><button class="button button-primary" type="submit">Save expense</button></div>
     </form>
   </dialog>
 
@@ -114,9 +120,9 @@
     <div id="historyList" class="history-list"></div>
     <div class="modal-actions"><button class="button button-primary" id="historyAddCredit" type="button">＋ Record entry</button></div>
   </dialog>
-  <div class="voice-control" id="voiceControl" hidden>
-    <p id="voiceStatus" role="status">Tap to speak · 30 sec max</p>
-    <button id="micButton" type="button" aria-label="Start voice recording" title="Speak a command">
+  <div class="voice-control" id="voiceControl">
+    <p id="voiceStatus" role="status">Tap mic or hold Space to speak</p>
+    <button id="micButton" type="button" aria-label="Start voice recording" aria-keyshortcuts="Space" title="Tap or hold Space to speak">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4m-4 0h8"/></svg>
     </button>
   </div>
